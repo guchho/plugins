@@ -24,7 +24,6 @@ Verified on 2026-10-10 against a local build of Guchho taken from the `guchho` s
 ## Basic configuration
 
 ```js
-import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -318,7 +317,6 @@ Guchho surfaces it as `Failed to evaluate "guchho.config.js"` with the stack tra
 JavaScript-only build, short style, overridden metadata:
 
 ```js
-import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -343,7 +341,6 @@ export default {
 CSS with a pinned year and the build date:
 
 ```js
-import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -359,7 +356,6 @@ export default {
 Several builds in one config file (each element is its own build):
 
 ```js
-import { build } from "guchho";
 import banner from "@guchho/banner";
 
 const plugin = [banner({ style: "long" })];
