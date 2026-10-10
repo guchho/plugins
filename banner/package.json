@@ -1,0 +1,39 @@
+{
+  "name": "@guchho/banner",
+  "version": "0.1.0",
+  "description": "Copyright and license banner plugin for Guchho JavaScript and CSS build outputs.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src/"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "verify": "npm test && npm pack --dry-run"
+  },
+  "keywords": [
+    "guchho",
+    "banner",
+    "copyright",
+    "license",
+    "legal-comment",
+    "build-tool",
+    "plugin",
+    "javascript",
+    "css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guchho/guchho-banner.git"
+  },
+  "homepage": "https://github.com/guchho/guchho-banner#readme",
+  "bugs": {
+    "url": "https://github.com/guchho/guchho-banner/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
