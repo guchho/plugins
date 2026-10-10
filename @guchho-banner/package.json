@@ -26,11 +26,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guchho/guchho-banner.git"
+    "url": "git+https://github.com/guchho/plugins.git",
+    "directory": "@guchho-banner"
   },
-  "homepage": "https://github.com/guchho/guchho-banner#readme",
+  "homepage": "https://github.com/guchho/plugins/tree/main/@guchho-banner#readme",
   "bugs": {
-    "url": "https://github.com/guchho/guchho-banner/issues"
+    "url": "https://github.com/guchho/plugins/issues"
   },
   "license": "MIT",
   "engines": {
