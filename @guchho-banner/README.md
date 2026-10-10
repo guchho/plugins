@@ -5,13 +5,7 @@ Copyright and license banner plugin for [Guchho](https://github.com/guchho/guchh
 A single plugin instance puts a deterministic `/*! ... */` legal comment at the top of every eligible JavaScript and CSS file Guchho generates. It survives minification, keeps source maps correct, coexists with Guchho's built-in banner, and never touches HTML, JSON, source-map files, or binary assets.
 
 
-<p align="center">
-  <a href="https://github.com/guchho">
-    <picture>
-        <img src="https://raw.githubusercontent.com/guchho/guchho-banner/refs/heads/main/resources/guchho_banner_plugin.png" alt="guchho plugin banner" width="100%" />
-    </picture>
-  </a>
-</p>
+[![Guchho Plugin Banner](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_banner_plugin.png)](https://github.com/guchho)
 
 
 ## Installation
