@@ -1,0 +1,94 @@
+name: npm-publish
+run-name: publish ${{ inputs.plugin }} (dry_run=${{ inputs.dry_run }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Package name to publish (e.g. @guchho/banner)
+        required: true
+        type: string
+      dry_run:
+        description: Dry run (skip the actual publish)
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-${{ inputs.plugin }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN: ${{ inputs.plugin }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve package directory
+        id: pkg
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const name = process.env.PLUGIN;
+          const entries = fs.readdirSync(".", { withFileTypes: true })
+            .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules");
+          let found = null;
+          for (const entry of entries) {
+            const candidate = path.join(entry.name, "package.json");
+            if (fs.existsSync(candidate)) {
+              const pkg = JSON.parse(fs.readFileSync(candidate, "utf8"));
+              if (pkg.name === name) { found = entry.name; break; }
+            }
+          }
+          if (!found) {
+            console.error(`::error::No package named ${name} found in this repository`);
+            process.exit(1);
+          }
+          console.log(`Resolved ${name} to ${found}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `dir=${found}\n`);
+          '
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm install --no-audit --no-fund
+
+      - name: Verify
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm run verify
+
+      - name: Check version is not already published
+        if: ${{ inputs.dry_run == false }}
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "${PLUGIN}@${version}" version >/dev/null 2>&1; then
+            echo "::error::${PLUGIN}@${version} is already published to npm"
+            exit 1
+          fi
+          echo "Publishing ${PLUGIN}@${version}"
+
+      - name: Publish
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run: not publishing"
+            npm publish --access public --dry-run
+          else
+            npm publish --access public
+          fi
