@@ -24,6 +24,7 @@ Verified on 2026-10-10 against a local build of Guchho taken from the `guchho` s
 ## Basic configuration
 
 ```js
+import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -65,6 +66,24 @@ The banner is injected at the very beginning of CSS outputs, above everything el
 
 ## Supported banner styles
 
+| Style | Description |
+| --- | --- |
+| `long` (default) | Detailed multiline banner with copyright and license. |
+| `short` | Compact, single-line copyright banner. |
+| `minimal` | Package name and version only. |
+| `compact` | Name, version, and license on one line, copyright below. |
+| `standard` | Conventional banner with a `License:` label. |
+| `production` | Clean banner for published libraries. |
+| `full` | All available package metadata as labeled fields. |
+| `legal` | Copyright and licensing focused, with LICENSE file reference. |
+| `license` | Package name, version, and license reference only. |
+| `author` | Package name, version, and author only. |
+| `version` | Alias of `minimal`. |
+| `dated` | Copyright with a configurable date line. |
+| `boxed` | Decorative banner with `=` separator lines. |
+| `separated` | Package info divided from legal details by a `-` line. |
+| `none` | No banner is injected. |
+
 ### `long` (default)
 
 ```js
@@ -82,16 +101,131 @@ The banner is injected at the very beginning of CSS outputs, above everything el
 /*! truehuman v0.0.6 | Copyright (c) 2026 Hemanta Gayen and contributors | GPL-3.0 License */
 ```
 
-Both are illustrative: the content comes from your metadata, not from these values. Missing fields are omitted and the remaining segments re-flow cleanly - the plugin never emits `undefined`, `null`, or malformed comments, and metadata containing newlines or `*/` is sanitized so the comment stays intact. Identical inputs produce identical output.
+### `minimal`
+
+```js
+/*! my-library v1.0.0 */
+```
+
+### `compact`
+
+```js
+/*!
+ * my-library v1.0.0 | MIT License
+ * Copyright (c) 2026 Your Name
+ */
+```
+
+### `standard`
+
+```js
+/*!
+ * my-library v1.0.0
+ * Copyright (c) 2026 Your Name
+ * License: MIT
+ */
+```
+
+### `production`
+
+```js
+/*!
+ * my-library v1.0.0
+ * Copyright (c) 2026 Your Name
+ * Licensed under the MIT License.
+ */
+```
+
+### `full`
+
+```js
+/*!
+ * Package: my-library
+ * Version: 1.0.0
+ * Description: A useful JavaScript library
+ * Author: Your Name
+ * Copyright (c) 2026 Your Name
+ * License: MIT
+ * Homepage: https://example.com
+ * Repository: https://github.com/example/my-library
+ */
+```
+
+Only fields with valid values are included. Missing metadata produces no `undefined`, `null`, or empty labels.
+
+### `legal`
+
+```js
+/*!
+ * my-library v1.0.0
+ * Copyright (c) 2026 Your Name
+ *
+ * Licensed under the MIT License.
+ * See the LICENSE file for details.
+ */
+```
+
+### `license`
+
+```js
+/*! my-library v1.0.0 | Released under the MIT License */
+```
+
+### `author`
+
+```js
+/*! my-library v1.0.0 | By Your Name */
+```
+
+### `dated`
+
+```js
+/*!
+ * my-library v1.0.0
+ * Copyright (c) 2026 Your Name
+ * License: MIT
+ * Date: 2026-10-11
+ */
+```
+
+### `boxed`
+
+```js
+/*!
+ * =================================
+ * my-library v1.0.0
+ * Copyright (c) 2026 Your Name
+ * License: MIT
+ * =================================
+ */
+```
+
+### `separated`
+
+```js
+/*!
+ * my-library v1.0.0
+ * ---------------------------------
+ * Copyright (c) 2026 Your Name
+ * License: MIT
+ */
+```
+
+### `none`
+
+Returns an empty banner string — no text is injected into any output.
+
+All examples are illustrative: the content comes from your metadata, not from these values. Missing fields are omitted and the remaining segments re-flow cleanly — the plugin never emits `undefined`, `null`, or malformed comments, and metadata containing newlines or `*/` is sanitized so the comment stays intact. Identical inputs produce identical output.
 
 ## Option reference
 
 | Option | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `style` | `"short" \| "long"` | `"long"` | Banner formatting. Any other value throws. |
+| `style` | `string` | `"long"` | Banner formatting. One of the 15 supported styles. Any other value throws. |
 | `packageJson` | `string` | `"./package.json"` | Package metadata file, relative to the config file's directory. |
-| `date` | `boolean` | `false` | Include the build date (`Built YYYY-MM-DD`, UTC). |
+| `date` | `boolean \| string` | `false` | `true` for today's date (UTC), or an explicit date string like `"2026-10-11"`. |
 | `year` | `number \| string` | Current year at config-evaluation time | Copyright year. |
+| `preserveExisting` | `boolean` | `false` | When `true`, the descriptor is flagged so the build can skip injection if an existing banner is detected. |
 | `name` | `string` | From `package.json` | Override package name. |
 | `version` | `string` | From `package.json` | Override package version. |
 | `author` | `string` | From `package.json` | Override author. |
@@ -103,7 +237,7 @@ Unknown option names throw, so typos fail fast instead of being ignored. Explici
 
 - The file is read **once per `banner()` call**, at config-evaluation time - never per output file, and never at module-import time.
 - Relative `packageJson` paths resolve against `process.cwd()`, which Guchho sets to the configuration file's own directory when it evaluates the config. The plugin's own installation directory is never consulted. Absolute paths work as-is.
-- Fields used: `name`, `version`, `author` (string or `{ name }` object - `email`/`url` are ignored in banners), `license`.
+- Fields used: `name`, `version`, `author` (string or `{ name }` object - `email`/`url` are ignored in banners), `license`, `description`, `homepage`, `repository` (string or `{ url }` object), `contributors` (array of strings or `{ name }` objects).
 - A missing file, unreadable file, invalid JSON, or non-object JSON is an error (see [Error handling](#error-handling)). Missing *fields* are not: their segments are simply omitted.
 - Non-string fields in `package.json` are treated as missing.
 - A `version` without a leading `v` gets one (`3.1.4` → `v3.1.4`); one that already has it is not double-prefixed.
@@ -167,7 +301,7 @@ Error: @guchho/banner: cannot read package metadata at C:\project\nope.json (ENO
 
 Guchho surfaces it as `Failed to evaluate "guchho.config.js"` with the stack trace, and **the build fails** (non-zero exit, no output written) - a broken configuration never silently falls back to a banner-less build. Covered cases:
 
-- invalid `style` (anything but `"short"`/`"long"`)
+- invalid `style` (anything but one of the 15 supported style names)
 - unknown option names and wrong option types
 - missing or unreadable `packageJson` file (reported with the resolved path)
 - invalid JSON or a non-object JSON document in `packageJson`
@@ -177,12 +311,14 @@ Guchho surfaces it as `Failed to evaluate "guchho.config.js"` with the stack tra
 - `date: false` (default): no clock reads other than the default `year`. Identical inputs produce byte-identical banners.
 - The default `year` is the calendar year at config-evaluation time; pin it with `year: "2026"` if your builds must be bit-stable across New Year.
 - `date: true` appends `Built YYYY-MM-DD` in **UTC** to the banner. Output then changes once per UTC day - expected, and documented here rather than hidden.
+- `date: "2026-10-11"` uses that exact string, producing deterministic output regardless of when the build runs.
 
 ## Examples
 
 JavaScript-only build, short style, overridden metadata:
 
 ```js
+import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -207,6 +343,7 @@ export default {
 CSS with a pinned year and the build date:
 
 ```js
+import { build } from "guchho";
 import banner from "@guchho/banner";
 
 export default {
@@ -222,6 +359,7 @@ export default {
 Several builds in one config file (each element is its own build):
 
 ```js
+import { build } from "guchho";
 import banner from "@guchho/banner";
 
 const plugin = [banner({ style: "long" })];
@@ -245,7 +383,7 @@ npm run verify    # tests + npm pack --dry-run
 - **Integration tests** (`test/integration.test.js`) run real `guchho build` invocations in throwaway projects, installing the package by name so the config's `import banner from "@guchho/banner"` resolves exactly as in a consumer project. They probe the binary for plugin banner support first and skip with an explanation when it is absent.
 - Set `GUCHHO_BIN=/path/to/guchho` to test a specific binary (authoritative - if it lacks support, the suite skips instead of testing something else).
 
-Current results: 26 unit tests and 22 integration tests passing (48 total).
+Current results: 49 unit tests and 7 integration tests passing (56 total).
 
 ## License
 
