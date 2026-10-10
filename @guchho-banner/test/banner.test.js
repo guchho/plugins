@@ -29,6 +29,24 @@ const LONG_EXAMPLE = [
 const SHORT_EXAMPLE =
   "/*! truehuman v0.0.6 | Copyright (c) 2026 Hemanta Gayen and contributors | GPL-3.0 License */";
 
+const STYLES = [
+  "minimal",
+  "short",
+  "compact",
+  "standard",
+  "long",
+  "production",
+  "full",
+  "legal",
+  "license",
+  "author",
+  "version",
+  "dated",
+  "boxed",
+  "separated",
+  "none",
+];
+
 function makeProject(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "guchho-banner-"));
   for (const [rel, content] of Object.entries(files)) {
@@ -65,7 +83,7 @@ test("default export is a function", () => {
 test("returns the descriptor shape with identical js and css text", () => {
   withProject({ "package.json": FULL_PACKAGE }, (dir) => {
     const descriptor = banner({ packageJson: path.join(dir, "package.json"), year: 2026 });
-    assert.deepEqual(Object.keys(descriptor).sort(), ["banner", "name"]);
+    assert.deepEqual(Object.keys(descriptor).sort(), ["banner", "name", "preserveExisting"]);
     assert.equal(descriptor.name, "@guchho/banner");
     assert.deepEqual(Object.keys(descriptor.banner).sort(), ["css", "js"]);
     assert.equal(descriptor.banner.css, descriptor.banner.js);
@@ -108,7 +126,7 @@ test("option types are validated", () => {
   withProject({ "package.json": FULL_PACKAGE }, () => {
     assert.throws(() => banner({ packageJson: 42 }), /packageJson must be a non-empty string/);
     assert.throws(() => banner({ packageJson: "" }), /packageJson must be a non-empty string/);
-    assert.throws(() => banner({ date: "yes" }), /date must be a boolean/);
+    assert.throws(() => banner({ date: 42 }), /date must be a boolean or a date string/);
     assert.throws(() => banner({ year: null }), /year must be a number or a string/);
     assert.throws(() => banner({ name: 7 }), /name must be a string/);
     assert.throws(() => banner({ version: true }), /version must be a string/);
@@ -282,4 +300,224 @@ test("metadata does not leak between projects", () => {
     fs.rmSync(first, { recursive: true, force: true });
     fs.rmSync(second, { recursive: true, force: true });
   }
+});
+
+const RICH_PACKAGE = JSON.stringify(
+  {
+    name: "my-library",
+    version: "1.0.0",
+    description: "A useful JavaScript library",
+    author: "Your Name",
+    contributors: ["Alice", { name: "Bob" }],
+    license: "MIT",
+    homepage: "https://example.com",
+    repository: { type: "git", url: "https://github.com/example/my-library" },
+  },
+  null,
+  2,
+);
+
+test("minimal style shows only name and version", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "minimal", year: 2026 }).banner.js;
+    assert.equal(text, "/*! truehuman v0.0.6 */");
+  });
+});
+
+test("version style is an alias of minimal", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const a = banner({ style: "version", year: 2026 }).banner.js;
+    const b = banner({ style: "minimal", year: 2026 }).banner.js;
+    assert.equal(a, b);
+    assert.equal(a, "/*! truehuman v0.0.6 */");
+  });
+});
+
+test("compact style joins name, version, and license on one line", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "compact", year: 2026 }).banner.js;
+    assert.ok(text.startsWith("/*!\n"));
+    assert.ok(text.includes(" * truehuman v0.0.6 | GPL-3.0 License"));
+    assert.ok(text.includes(" * Copyright (c) 2026 Hemanta Gayen and contributors"));
+  });
+});
+
+test("standard style uses a License: label", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "standard", year: 2026 }).banner.js;
+    assert.ok(text.includes(" * License: GPL-3.0"));
+    assert.ok(!text.includes("GPL-3.0 License"));
+  });
+});
+
+test("production style uses Licensed under with a period", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "production", year: 2026 }).banner.js;
+    assert.ok(text.includes(" * Licensed under the GPL-3.0 License."));
+  });
+});
+
+test("legal style adds a LICENSE file reference", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "legal", year: 2026 }).banner.js;
+    assert.ok(text.includes(" * Licensed under the GPL-3.0 License."));
+    assert.ok(text.includes(" * See the LICENSE file for details."));
+  });
+});
+
+test("legal style omits license lines when no license is present", () => {
+  withProject({ "package.json": JSON.stringify({ name: "x", version: "1.0.0" }) }, () => {
+    const text = banner({ style: "legal", year: 2026 }).banner.js;
+    assert.ok(!text.includes("LICENSE"));
+    assert.ok(!text.includes("Licensed under"));
+  });
+});
+
+test("license style focuses on the license reference", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "license", year: 2026 }).banner.js;
+    assert.equal(text, "/*! truehuman v0.0.6 | Released under the GPL-3.0 License */");
+  });
+});
+
+test("author style focuses on name and author", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "author", year: 2026 }).banner.js;
+    assert.equal(text, "/*! truehuman v0.0.6 | By Hemanta Gayen and contributors */");
+  });
+});
+
+test("dated style includes a Date: line", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "dated", year: 2026, date: "2026-10-11" }).banner.js;
+    assert.ok(text.includes(" * Date: 2026-10-11"));
+  });
+});
+
+test("boxed style wraps content in separator lines", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "boxed", year: 2026 }).banner.js;
+    const lines = text.split("\n");
+    assert.ok(lines[1].includes("================================="));
+    assert.ok(lines[lines.length - 2].includes("================================="));
+  });
+});
+
+test("separated style divides package info from legal details", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ style: "separated", year: 2026 }).banner.js;
+    assert.ok(text.includes("---------------------------------"));
+    const lines = text.split("\n");
+    const sepIndex = lines.findIndex((l) => l.includes("---"));
+    assert.ok(sepIndex > 0);
+    assert.ok(lines[sepIndex - 1].includes("truehuman"));
+  });
+});
+
+test("none style returns an empty banner string", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const descriptor = banner({ style: "none", year: 2026 });
+    assert.equal(descriptor.banner.js, "");
+    assert.equal(descriptor.banner.css, "");
+  });
+});
+
+test("full style includes all available metadata", () => {
+  withProject({ "package.json": RICH_PACKAGE }, () => {
+    const text = banner({ style: "full", year: 2026 }).banner.js;
+    assert.ok(text.includes(" * Package: my-library"));
+    assert.ok(text.includes(" * Version: 1.0.0"));
+    assert.ok(text.includes(" * Description: A useful JavaScript library"));
+    assert.ok(text.includes(" * Author: Your Name"));
+    assert.ok(text.includes(" * Contributors: Alice, Bob"));
+    assert.ok(text.includes(" * Copyright (c) 2026 Your Name"));
+    assert.ok(text.includes(" * License: MIT"));
+    assert.ok(text.includes(" * Homepage: https://example.com"));
+    assert.ok(text.includes(" * Repository: https://github.com/example/my-library"));
+  });
+});
+
+test("full style omits empty fields", () => {
+  withProject({ "package.json": JSON.stringify({ name: "solo", version: "1.0.0" }) }, () => {
+    const text = banner({ style: "full", year: 2026 }).banner.js;
+    assert.ok(text.includes(" * Package: solo"));
+    assert.ok(text.includes(" * Version: 1.0.0"));
+    assert.ok(!text.includes("Description:"));
+    assert.ok(!text.includes("Author:"));
+    assert.ok(!text.includes("Homepage:"));
+    assert.ok(!text.includes("Repository:"));
+    assert.ok(!text.includes("undefined"));
+    assert.ok(!text.includes("null"));
+  });
+});
+
+test("date accepts an explicit date string", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ year: 2026, date: "2026-10-11" }).banner.js;
+    assert.ok(text.includes("Built 2026-10-11"));
+    const again = banner({ year: 2026, date: "2026-10-11" }).banner.js;
+    assert.equal(text, again);
+  });
+});
+
+test("date true produces today's date in UTC", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const text = banner({ year: 2026, date: true }).banner.js;
+    const today = new Date().toISOString().slice(0, 10);
+    assert.ok(text.includes(`Built ${today}`));
+  });
+});
+
+test("preserveExisting defaults to false", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const descriptor = banner({ year: 2026 });
+    assert.equal(descriptor.preserveExisting, false);
+  });
+});
+
+test("preserveExisting accepts true", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    const descriptor = banner({ year: 2026, preserveExisting: true });
+    assert.equal(descriptor.preserveExisting, true);
+  });
+});
+
+test("preserveExisting rejects non-boolean values", () => {
+  withProject({ "package.json": FULL_PACKAGE }, () => {
+    assert.throws(() => banner({ preserveExisting: "yes" }), /preserveExisting must be a boolean/);
+  });
+});
+
+test("all styles produce valid block comments", () => {
+  withProject({ "package.json": RICH_PACKAGE }, () => {
+    for (const style of STYLES) {
+      const text = banner({ style, year: 2026 }).banner.js;
+      if (style === "none") {
+        assert.equal(text, "");
+        continue;
+      }
+      assert.ok(text.startsWith("/*!"), `${style} should start with /*!`);
+      assert.ok(text.endsWith("*/"), `${style} should end with */`);
+      assert.equal(text.indexOf("*/"), text.lastIndexOf("*/"), `${style} should have one */`);
+    }
+  });
+});
+
+test("all styles emit identical js and css text", () => {
+  withProject({ "package.json": RICH_PACKAGE }, () => {
+    for (const style of STYLES) {
+      const descriptor = banner({ style, year: 2026 });
+      assert.equal(descriptor.banner.js, descriptor.banner.css, `${style} js/css mismatch`);
+    }
+  });
+});
+
+test("all styles omit undefined and null in output", () => {
+  withProject({ "package.json": JSON.stringify({ name: "x" }) }, () => {
+    for (const style of STYLES) {
+      const text = banner({ style, year: 2026 }).banner.js;
+      assert.ok(!text.includes("undefined"), `${style} contains undefined`);
+      assert.ok(!text.includes("null"), `${style} contains null`);
+    }
+  });
 });
