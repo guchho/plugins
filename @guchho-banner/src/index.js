@@ -292,8 +292,11 @@ const STYLE_BUILDERS = {
   },
 };
 
-export default function banner(options) {
-  const opts = validateOptions(options);
+// Renders the banner text from validated options and the metadata file. This is
+// the pure part of the plugin, separated so tests can drive the styles without a
+// bundle in hand. Reading happens here — exactly once per call — which the
+// plugin defers to its buildStart hook so errors travel as plugin diagnostics.
+function renderFromOptions(opts) {
   const data = loadMetadata(opts.packageJson);
 
   const name = sanitize(
@@ -336,11 +339,74 @@ export default function banner(options) {
   };
 
   const build = STYLE_BUILDERS[opts.style];
-  const text = build(head, copyright, licenseRef, dateText, meta);
+  return build(head, copyright, licenseRef, dateText, meta);
+}
+
+// Renders the banner text for a user-facing options object: validates the
+// options first, then reads the metadata and formats the result.
+export function renderBanner(options) {
+  return renderFromOptions(validateOptions(options));
+}
+
+// Files that get the banner. Chunks are every JavaScript-like output the engine
+// emits; CSS reaches generateBundle as an asset, so it is matched by name. Maps,
+// JSON, HTML and binary assets are left alone, and the legal-comment form is
+// what preserveExisting looks for before injecting.
+const CSS_OUTPUT = /\.css$/i;
+const LEGAL_BANNER = /^\s*\/\*!/;
+
+function prepend(text, source) {
+  const body = String(source);
+  if (!text) return body;
+  if (!body) return text;
+  return `${text}\n${body}`;
+}
+
+// Adds a leading banner to one output. Returns false when the output already
+// carries a legal banner and preserveExisting says to keep it.
+function bannerOne(text, output, preserveExisting) {
+  const source = output.type === "asset" ? String(output.source) : String(output.code);
+  if (preserveExisting && LEGAL_BANNER.test(source)) return;
+  if (output.type === "asset") output.source = prepend(text, output.source);
+  else output.code = prepend(text, output.code);
+}
+
+// The plugin. banner() validates its options immediately — a typo fails the
+// config before a build starts — and defers the metadata read to buildStart so
+// a missing package.json is a plugin diagnostic on the build rather than a
+// crash in the host. generateBundle rewrites every eligible output in place.
+export default function banner(options) {
+  const opts = validateOptions(options);
+  let state = null;
+
+  const buildState = (context) => {
+    if (state !== null) return state;
+    try {
+      state = { text: renderFromOptions(opts), preserveExisting: opts.preserveExisting };
+    } catch (error) {
+      context.error(error);
+    }
+    return state;
+  };
 
   return {
     name: PREFIX,
-    banner: { js: text, css: text },
-    preserveExisting: opts.preserveExisting,
+
+    buildStart() {
+      buildState(this);
+    },
+
+    generateBundle(_options, bundle) {
+      const built = buildState(this);
+      if (!built.text) return;
+      for (const output of Object.values(bundle)) {
+        if (output === null || typeof output !== "object") continue;
+        if (output.type === "chunk") {
+          bannerOne(built.text, output, built.preserveExisting);
+        } else if (output.type === "asset" && CSS_OUTPUT.test(output.fileName)) {
+          bannerOne(built.text, output, built.preserveExisting);
+        }
+      }
+    },
   };
 }
