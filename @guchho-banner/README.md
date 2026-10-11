@@ -2,7 +2,7 @@
 
 Copyright and license banner plugin for [Guchho](https://github.com/guchho/guchho) JavaScript and CSS build outputs.
 
-A single plugin instance puts a deterministic `/*! ... */` legal comment at the top of every eligible JavaScript and CSS file Guchho generates. It survives minification, keeps source maps correct, coexists with Guchho's built-in banner, and never touches HTML, JSON, source-map files, or binary assets.
+A single plugin instance puts a deterministic `/*! ... */` legal comment at the top of every eligible JavaScript and CSS file Guchho generates. It survives minification, coexists with Guchho's built-in banner, and never touches HTML, JSON, source-map files, or binary assets.
 
 
 [![Guchho Plugin Banner](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_banner_plugin.png)](https://github.com/guchho)
@@ -14,12 +14,10 @@ A single plugin instance puts a deterministic `/*! ... */` legal comment at the 
 npm install -D @guchho/banner
 ```
 
-## Requirements and verified Guchho compatibility
+## Requirements
 
-- **Node.js 18 or newer.** Guchho evaluates `guchho.config.js` by spawning Node, and the plugin runs at config-evaluation time.
-- **A Guchho build that reads `plugins` entries as data descriptors.** Guchho's config crosses from Node to the bundler as JSON, so nothing callable survives; this plugin returns a plain descriptor (`{ name, banner: { js, css } }`) that the config loader appends to the built-in banner.
-
-Verified on 2026-10-10 against a local build of Guchho taken from the `guchho` source repository (v1.0.3 plus plugin banner descriptor support), covering:
+- **Node.js 18 or newer.** Guchho runs plugin hooks in the host process while a build runs.
+- **A Guchho that hosts plugin hooks.** The plugin is a [Guchho plugin](https://github.com/guchho/guchho/tree/main/docs/plugins) — an object with `buildStart` and `generateBundle` — so it needs the engine that runs the plugin bridge. Older Guchho releases that treated `plugins` as a data descriptor will not run it.
 
 ## Basic configuration
 
@@ -42,26 +40,34 @@ export default {
 
 One instance handles every eligible JavaScript and CSS output of the build it belongs to. No separate JS and CSS plugin instances are needed.
 
+## How it works
+
+`banner(options)` validates the options immediately and hands back a plugin object.
+
+- `buildStart` reads the package metadata **once per build** and renders the banner text. A missing file, unreadable file, invalid JSON, or non-object JSON fails the build with a plugin-named diagnostic via `this.error` — the build stops, no output is written.
+- `generateBundle` prepends that text to every eligible output:
+  - **JavaScript chunks** — every generated `.js`/`.mjs`/`.cjs`/`.jsx`/`.ts`/`.tsx` output.
+  - **CSS outputs**, matched by their `.css` file name.
+  - Everything else is left alone: source maps, JSON, HTML, and binary assets never receive a banner.
+
+The banner sits at the very top of each file, above Guchho's own `build.banner` text and above any existing comment. It appears exactly once per file. The `none` style produces an empty banner and the hook touches nothing.
+
 ## JavaScript output support
 
-The banner is injected at the very beginning of JavaScript outputs, above everything else, in every format Guchho generates (`esm`, `cjs`, `iife`, `umd` verified; `amd`/`system` untested).
+The banner is prepended to the very beginning of JavaScript outputs, above everything else, in every format Guchho generates.
 
 - Works with both minified and unminified output.
 - The banner uses the legal-comment form `/*! ... */`, which Guchho's minifier preserves.
 - Minification is never disabled and its defaults are never changed.
-- Directive prologues (`"use strict"`) are unaffected - the banner is a comment, not a statement.
-- Source maps account for the banner lines (see [Source-map behavior](#source-map-behavior)).
-- The banner appears exactly once per file; the plugin does not inject twice.
+- Directive prologues (`"use strict"`) are unaffected — the banner is a comment, not a statement.
 
 ## CSS output support
 
-The banner is injected at the very beginning of CSS outputs, above everything else - JavaScript-only support would not be a working plugin.
+The banner is prepended to the very beginning of CSS outputs, above everything else.
 
 - Works with minified and unminified CSS.
 - Uses valid CSS block-comment syntax (the same text as JavaScript).
 - Survives CSS minification without changing selectors, declarations, at-rules, or `@charset` handling.
-- Source maps account for the banner lines.
-- Appears exactly once per file.
 
 ## Supported banner styles
 
@@ -224,7 +230,7 @@ All examples are illustrative: the content comes from your metadata, not from th
 | `packageJson` | `string` | `"./package.json"` | Package metadata file, relative to the config file's directory. |
 | `date` | `boolean \| string` | `false` | `true` for today's date (UTC), or an explicit date string like `"2026-10-11"`. |
 | `year` | `number \| string` | Current year at config-evaluation time | Copyright year. |
-| `preserveExisting` | `boolean` | `false` | When `true`, the descriptor is flagged so the build can skip injection if an existing banner is detected. |
+| `preserveExisting` | `boolean` | `false` | When `true`, an output that already starts with a `/*!` legal banner is left untouched. |
 | `name` | `string` | From `package.json` | Override package name. |
 | `version` | `string` | From `package.json` | Override package version. |
 | `author` | `string` | From `package.json` | Override author. |
@@ -234,10 +240,10 @@ Unknown option names throw, so typos fail fast instead of being ignored. Explici
 
 ## Package metadata resolution
 
-- The file is read **once per `banner()` call**, at config-evaluation time - never per output file, and never at module-import time.
+- The file is read **once per build**, in the `buildStart` hook — never per output file.
 - Relative `packageJson` paths resolve against `process.cwd()`, which Guchho sets to the configuration file's own directory when it evaluates the config. The plugin's own installation directory is never consulted. Absolute paths work as-is.
-- Fields used: `name`, `version`, `author` (string or `{ name }` object - `email`/`url` are ignored in banners), `license`, `description`, `homepage`, `repository` (string or `{ url }` object), `contributors` (array of strings or `{ name }` objects).
-- A missing file, unreadable file, invalid JSON, or non-object JSON is an error (see [Error handling](#error-handling)). Missing *fields* are not: their segments are simply omitted.
+- Fields used: `name`, `version`, `author` (string or `{ name }` object — `email`/`url` are ignored in banners), `license`, `description`, `homepage`, `repository` (string or `{ url }` object), `contributors` (array of strings or `{ name }` objects).
+- A missing file, unreadable file, invalid JSON, or non-object JSON fails the build with a plugin-named error (see [Error handling](#error-handling)). Missing *fields* are not: their segments are simply omitted.
 - Non-string fields in `package.json` are treated as missing.
 - A `version` without a leading `v` gets one (`3.1.4` → `v3.1.4`); one that already has it is not double-prefixed.
 - A license value that already ends in `License` is not suffixed again.
@@ -256,22 +262,18 @@ banner({
 });
 ```
 
-`year` has no `package.json` counterpart - it always comes from the option (defaulting to the current year).
+`year` has no `package.json` counterpart — it always comes from the option (defaulting to the current year).
 
 ## Built-in banner compatibility
 
-Guchho's own `build.banner` (`{ js, css }`, or a plain string for the JavaScript half) keeps working unchanged. When both are configured:
-
-- the built-in banner is emitted first,
-- the plugin banner is appended below it,
-- identical text is never appended twice.
+Guchho's own `build.banner` (a plain string for the JavaScript half) keeps working unchanged. When both are configured, the plugin banner is prepended above the built-in banner — the plugin text comes first because `generateBundle` runs after the engine applied its own banner.
 
 ```js
 export default {
   build: {
     entry: "src/main.js",
     outdir: "dist",
-    banner: { js: "/*! Built-in */" },
+    banner: "/*! Built-in */",
   },
   plugins: [banner({ year: 2026 })],
 };
@@ -279,37 +281,31 @@ export default {
 
 ## Minification behavior
 
-- `/*! ... */` is the legal-comment form; Guchho's JavaScript and CSS minifiers preserve it (verified on minified `esm` and `umd` output and minified CSS).
+- `/*! ... */` is the legal-comment form; Guchho's JavaScript and CSS minifiers preserve it.
 - The plugin never disables minification and never changes minification defaults.
 - Unrelated comments are not touched by the plugin; any comment handling by Guchho's minifier is Guchho's own behavior.
 
 ## Source-map behavior
 
-- Verified with `sourcemap: true` (linked mode: external `.map` file plus `//# sourceMappingURL=` comment) for both JavaScript and CSS.
-- The tests decode the emitted mappings and assert that the first generated line *after* the banner maps back to line 0 of the original source - the banner does not shift mappings.
-- `.map` files are JSON outputs and are never bannered; `sources` and `sourcesContent` are preserved.
-- Other source-map modes (`inline`, `external`, …) are not tested; no claims are made about them.
+- `.map` files are never bannered: they arrive as JSON assets and the plugin skips every non-CSS asset.
+- Generating a source map together with a plugin banner places the banner ahead of the mapping, which **shifts the generated line numbers** the same way any prepended text does. If your tooling compares generated positions against `sourcesContent`, prefer Guchho's built-in `banner` option, which the engine accounts for when emitting maps.
 
 ## Error handling
 
-Configuration mistakes throw a plain `Error` whose message starts with `@guchho/banner:`:
+A broken configuration fails the build rather than silently producing a banner-less build:
+
+- **At plugin creation** (`banner(...)` is called, during config evaluation): invalid `style`, unknown option names, and wrong option types throw a plain `Error` whose message starts with `@guchho/banner:`.
+- **In `buildStart`** (when the build runs): missing or unreadable `packageJson`, invalid JSON, or a non-object JSON document call `this.error`, failing the build with a plugin-named diagnostic that includes the resolved path.
 
 ```text
-Error: @guchho/banner: cannot read package metadata at C:\project\nope.json (ENOENT)
+@guchho/banner: cannot read package metadata at C:\project\nope.json (ENOENT)
 ```
-
-Guchho surfaces it as `Failed to evaluate "guchho.config.js"` with the stack trace, and **the build fails** (non-zero exit, no output written) - a broken configuration never silently falls back to a banner-less build. Covered cases:
-
-- invalid `style` (anything but one of the 15 supported style names)
-- unknown option names and wrong option types
-- missing or unreadable `packageJson` file (reported with the resolved path)
-- invalid JSON or a non-object JSON document in `packageJson`
 
 ## Reproducible builds and the `date` option
 
 - `date: false` (default): no clock reads other than the default `year`. Identical inputs produce byte-identical banners.
 - The default `year` is the calendar year at config-evaluation time; pin it with `year: "2026"` if your builds must be bit-stable across New Year.
-- `date: true` appends `Built YYYY-MM-DD` in **UTC** to the banner. Output then changes once per UTC day - expected, and documented here rather than hidden.
+- `date: true` appends `Built YYYY-MM-DD` in **UTC** to the banner. Output then changes once per UTC day — expected, and documented here rather than hidden.
 - `date: "2026-10-11"` uses that exact string, producing deterministic output regardless of when the build runs.
 
 ## Examples
@@ -325,7 +321,6 @@ export default {
     outfile: "dist/app.js",
     format: "cjs",
     minify: true,
-    sourcemap: true,
   },
   plugins: [
     banner({
@@ -375,11 +370,21 @@ npm test          # unit + integration (node:test, no dependencies)
 npm run verify    # tests + npm pack --dry-run
 ```
 
-- **Unit tests** (`test/banner.test.js`) cover styles, option validation, metadata resolution, overrides, author objects, error cases, sanitization, and determinism. They need no Guchho binary.
-- **Integration tests** (`test/integration.test.js`) run real `guchho build` invocations in throwaway projects, installing the package by name so the config's `import banner from "@guchho/banner"` resolves exactly as in a consumer project. They probe the binary for plugin banner support first and skip with an explanation when it is absent.
-- Set `GUCHHO_BIN=/path/to/guchho` to test a specific binary (authoritative - if it lacks support, the suite skips instead of testing something else).
+- **Unit tests** (`test/banner.test.js`) cover styles, option validation, metadata resolution, overrides, author objects, error cases, sanitization, determinism, and the plugin's `generateBundle` behavior against a hand-built bundle. They need no Guchho binary.
+- **Integration tests** (`test/integration.test.js`) run real `guchho build` invocations in throwaway projects and assert the banner lands in JS and CSS outputs, source maps stay intact, and a broken metadata file fails the build. The engine is resolved in this order:
+  1. `GUCHHO_PACKAGE=/path/to/guchho-package` — a checkout or installed package to test against.
+  2. A sibling `guchho/` checkout two directories up, so running the tests from the plugins monorepo picks up a local engine automatically (point `GUCHHO_BINARY` at a freshly built binary if the checkout has one).
+  3. The installed `guchho` dependency.
+  
+  The suite probes the resolved engine for plugin-hook support first and skips with an explanation when the engine lacks it.
 
-Current results: 49 unit tests and 7 integration tests passing (56 total).
+Current results: 54 unit tests and 4 integration tests passing.
+
+## Known limitations
+
+- The plugin host's `transform` hook and `this.resolve`/`this.getFileName` are not wired yet in Guchho. A banner only needs `generateBundle`, so this plugin is unaffected.
+- The engine's own `banner` option stays the source-map–correct way to prepend text; the plugin's position is deliberately the top of the finished file.
+- The engine crashes (access violation, exit code `3221225477`) on a single build that emits **both** a JS and a CSS source map. This is engine-side and reproduces without any plugin; per-type builds (JS-only with maps, or CSS without maps) are fine.
 
 ## License
 
