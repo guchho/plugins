@@ -1,6 +1,6 @@
 {
   "name": "@guchho/banner",
-  "version": "0.2.0",
+  "version": "0.1.3",
   "description": "Copyright and license banner plugin for Guchho JavaScript and CSS build outputs.",
   "type": "module",
   "exports": {
