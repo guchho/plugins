@@ -1,141 +1,190 @@
-// Use the build() API from the installed Guchho npm package for integration testing.
+// Integration tests against a real Guchho build.
+//
+// The banner plugin is a hook plugin: guchho runs it in the host process while
+// a build runs, so these tests need a guchho whose build() hosts plugins. The
+// published guchho may not have that host yet, so the suite resolves the engine
+// deliberately:
+//
+//   1. GUCHHO_PACKAGE  — a path to a guchho package (a checkout of the repo, or
+//                        an installed one), used as-is.
+//   2. a sibling       — ../.. up to the monorepo root, then guchho/. Chosen so
+//                        importing a local repo checkout is automatic.
+//   3. import("guchho")— whatever is installed.
+//
+// Whatever engine is resolved, the suite probes it for plugin support with a
+// no-op buildStart and skips with an explanation when it answers no.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { build, stop, ServiceError } from "guchho";
+import { pathToFileURL } from "node:url";
+
 import banner from "../src/index.js";
 
-test("build prepends the plugin banner to the JS output", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "guchho-banner-integration-"));
-  try {
-    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
-    fs.writeFileSync(
-      path.join(dir, "package.json"),
-      JSON.stringify({ name: "demo-app", version: "1.0.0", author: "Hemanta Gayen", license: "MIT" }),
-    );
-    fs.writeFileSync(path.join(dir, "src", "index.js"), "export const value = 42;");
-
-    const previous = process.cwd();
-    process.chdir(dir);
-    try {
-      const descriptor = banner({ year: 2026 });
-      try {
-        await build({
-          entrypoints: ["src/index.js"],
-          outdir: "dist",
-          banner: descriptor.banner.js,
-          write: true,
-        });
-      } catch (error) {
-        if (error instanceof ServiceError) {
-          t.skip(`guchho engine unavailable: ${error.message}`);
-          return;
-        }
-        throw error;
-      }
-    } finally {
-      process.chdir(previous);
+function resolveEngineUrl() {
+  const override = process.env.GUCHHO_PACKAGE;
+  if (override) {
+    const absolute = path.resolve(override);
+    if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()) {
+      return pathToFileURL(path.join(absolute, "lib", "index.mjs")).href;
     }
-
-    const output = fs.readFileSync(path.join(dir, "dist", "index.js"), "utf8");
-    assert.ok(output.startsWith("/*!"));
-    assert.ok(output.includes("demo-app v1.0.0"));
-    assert.ok(output.includes("Copyright (c) 2026 Hemanta Gayen"));
-    assert.ok(output.includes("Released under the MIT License"));
-    assert.ok(output.includes("export const value = 42;"));
-  } finally {
-    await stop();
-    fs.rmSync(dir, { recursive: true, force: true });
+    return pathToFileURL(absolute).href;
   }
-});
 
-const RICH_PACKAGE = JSON.stringify(
-  {
-    name: "my-library",
-    version: "1.0.0",
-    description: "A useful JavaScript library",
-    author: "Your Name",
-    license: "MIT",
-    homepage: "https://example.com",
-    repository: { type: "git", url: "https://github.com/example/my-library" },
-  },
-  null,
-  2,
-);
+  const sibling = new URL("../../../guchho/package/npm/guchho/lib/index.mjs", import.meta.url);
+  if (fs.existsSync(sibling)) return sibling.href;
 
-function withProject(files, fn) {
+  return "guchho";
+}
+
+function makeProject(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "guchho-banner-integration-"));
   for (const [rel, content] of Object.entries(files)) {
     const target = path.join(dir, rel);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   }
-  const previous = process.cwd();
-  process.chdir(dir);
-  try {
-    return fn(dir);
-  } finally {
-    process.chdir(previous);
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  return dir;
 }
 
-test("minimal style descriptor contains only name and version", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    const descriptor = banner({ style: "minimal", year: 2026 });
-    assert.equal(descriptor.banner.js, "/*! my-library v1.0.0 */");
+function textOf(result, ending) {
+  const normalized = ending.replace(/\\/g, "/");
+  const file = result.outputFiles.find((f) => f.path.replace(/\\/g, "/").endsWith(normalized));
+  return file === undefined ? undefined : file.text;
+}
+
+async function probePlugins(guchho) {
+  let sawStart = false;
+  const plugin = {
+    name: "@guchho/banner-probe",
+    buildStart() {
+      sawStart = true;
+    },
+  };
+  try {
+    await guchho.build({
+      stdin: { contents: "console.log(1);", loader: "js" },
+      write: false,
+      plugins: [plugin],
+    });
+  } catch {
+    return false;
+  }
+  return sawStart;
+}
+
+const guchho = await import(resolveEngineUrl());
+const supportsPlugins = await probePlugins(guchho);
+const skip = supportsPlugins
+  ? false
+  : "this guchho does not host plugin hooks; set GUCHHO_PACKAGE (and a matching GUCHHO_BINARY) or use a newer guchho";
+
+test("build prepends the plugin banner to JS and CSS outputs", { skip }, async () => {
+  const dir = makeProject({
+    "package.json": JSON.stringify({ name: "demo-app", version: "1.0.0", author: "Hemanta Gayen", license: "MIT" }),
+    "src/index.js": "export const value = 42;",
+    "src/styles.css": "body{color:red}",
   });
+  try {
+    const result = await guchho.build({
+      absWorkingDir: dir,
+      entrypoints: ["src/index.js", "src/styles.css"],
+      outdir: "dist",
+      bundle: true,
+      write: false,
+      plugins: [banner({ packageJson: path.join(dir, "package.json"), year: 2026 })],
+    });
+
+    assert.ok(
+      !result.errors.length,
+      `build failed: ${result.errors.map((e) => e.text).join("\n")}`,
+    );
+
+    const js = textOf(result, "dist/index.js");
+    assert.ok(js.startsWith("/*!"), "the JS output should start with the banner");
+    assert.ok(js.includes("demo-app v1.0.0"));
+    assert.ok(js.includes("Copyright (c) 2026 Hemanta Gayen"));
+    assert.ok(js.includes("Released under the MIT License"));
+    assert.ok(js.includes("value = 42"));
+
+    const css = textOf(result, "dist/styles.css");
+    assert.ok(css.startsWith("/*!"), "the CSS output should start with the banner");
+    assert.ok(css.includes("demo-app v1.0.0"));
+    assert.ok(css.includes("color: red"));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
-test("full style descriptor includes all metadata fields", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    const text = banner({ style: "full", year: 2026 }).banner.js;
-    assert.ok(text.includes("Package: my-library"));
-    assert.ok(text.includes("Version: 1.0.0"));
-    assert.ok(text.includes("Description: A useful JavaScript library"));
-    assert.ok(text.includes("Author: Your Name"));
-    assert.ok(text.includes("License: MIT"));
-    assert.ok(text.includes("Homepage: https://example.com"));
-    assert.ok(text.includes("Repository: https://github.com/example/my-library"));
+test("a source map is left untouched while the JS output is bannered", { skip }, async () => {
+  const dir = makeProject({
+    "package.json": JSON.stringify({ name: "demo-app", version: "1.0.0" }),
+    "src/index.js": "export const value = 42;",
   });
+  try {
+    const result = await guchho.build({
+      absWorkingDir: dir,
+      entrypoints: ["src/index.js"],
+      outdir: "dist",
+      bundle: true,
+      sourcemap: true,
+      write: false,
+      plugins: [banner({ packageJson: path.join(dir, "package.json"), year: 2026 })],
+    });
+
+    assert.ok(!result.errors.length, result.errors.map((e) => e.text).join("\n"));
+    const js = textOf(result, "dist/index.js");
+    assert.ok(js.startsWith("/*!"), "the JS output should start with the banner");
+
+    const jsMap = textOf(result, "dist/index.js.map");
+    assert.ok(jsMap !== undefined, "a source map should have been produced");
+    assert.ok(jsMap.startsWith("{"), "the source map should remain JSON");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
-test("none style descriptor has empty banner text", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    const descriptor = banner({ style: "none", year: 2026 });
-    assert.equal(descriptor.banner.js, "");
-    assert.equal(descriptor.banner.css, "");
+test("preserveExisting keeps a file that already carries a legal banner", { skip }, async () => {
+  const dir = makeProject({
+    "package.json": JSON.stringify({ name: "demo-app", version: "1.0.0" }),
+    "src/index.js": "/*! already here */\nconsole.log(1);",
   });
+  try {
+    const result = await guchho.build({
+      absWorkingDir: dir,
+      entrypoints: ["src/index.js"],
+      outdir: "dist",
+      write: false,
+      plugins: [banner({ packageJson: path.join(dir, "package.json"), year: 2026, preserveExisting: true })],
+    });
+
+    assert.ok(!result.errors.length, result.errors.map((e) => e.text).join("\n"));
+    const js = textOf(result, "dist/index.js");
+    assert.ok(js.startsWith("/*! already here */"), "the existing banner should be preserved");
+    assert.ok(!js.includes("demo-app"), "the plugin should not have injected its own");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
-test("preserveExisting flag is exposed on the descriptor", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    assert.equal(banner({ year: 2026 }).preserveExisting, false);
-    assert.equal(banner({ year: 2026, preserveExisting: true }).preserveExisting, true);
-  });
-});
-
-test("date string option produces a deterministic banner", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    const a = banner({ year: 2026, date: "2026-10-11" }).banner.js;
-    const b = banner({ year: 2026, date: "2026-10-11" }).banner.js;
-    assert.equal(a, b);
-    assert.ok(a.includes("Built 2026-10-11"));
-  });
-});
-
-test("all styles produce identical js and css text on the descriptor", () => {
-  withProject({ "package.json": RICH_PACKAGE }, () => {
-    const styles = [
-      "minimal", "short", "compact", "standard", "long",
-      "production", "full", "legal", "license", "author",
-      "version", "dated", "boxed", "separated", "none",
-    ];
-    for (const style of styles) {
-      const descriptor = banner({ style, year: 2026 });
-      assert.equal(descriptor.banner.js, descriptor.banner.css, `${style} js/css mismatch`);
-    }
-  });
+test("a missing package.json fails the build with the plugin's message", { skip }, async () => {
+  const dir = makeProject({ "src/index.js": "console.log(1);" });
+  try {
+    await assert.rejects(
+      () =>
+        guchho.build({
+          absWorkingDir: dir,
+          entrypoints: ["src/index.js"],
+          outdir: "dist",
+          write: false,
+          plugins: [banner({ packageJson: path.join(dir, "missing.json") })],
+        }),
+      (error) =>
+        String(error.message).includes("cannot read package metadata") &&
+        String(error.message).includes("@guchho/banner"),
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
