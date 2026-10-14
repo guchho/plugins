@@ -1,0 +1,14 @@
+{
+  "name": "guchho-dts-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "guchho build"
+  },
+  "devDependencies": {
+    "@guchho/dts": "^0.2.0",
+    "guchho": "^1.0.6",
+    "typescript": "^6.0.0"
+  }
+}
