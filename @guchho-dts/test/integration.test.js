@@ -115,6 +115,44 @@ test("build emits a bundled declaration alongside the JavaScript output", { skip
   }
 });
 
+test("build compiles a .ts source entry and emits its declarations", { skip }, async () => {
+  const dir = makeProject({
+    "src/index.ts": 'export { add } from "./math";\nexport interface Point { x: number }\n',
+    "src/math.ts": "export function add(a: number, b: number): number {\n  return a + b;\n}\n",
+  });
+  try {
+    const result = await guchho.build({
+      absWorkingDir: dir,
+      entrypoints: ["src/index.ts"],
+      outdir: "dist",
+      format: "esm",
+      bundle: true,
+      write: false,
+      plugins: [
+        dts({
+          entry: path.join(dir, "src", "index.ts"),
+          outfile: path.join(dir, "dist", "index.d.ts"),
+        }),
+      ],
+    });
+
+    assert.ok(
+      !result.errors.length,
+      `build failed: ${result.errors.map((e) => e.text).join("\n")}`,
+    );
+
+    assert.ok(textOf(result, "dist/index.js") !== undefined, "the JS output should be written");
+
+    const declaration = textOf(result, "dist/index.d.ts");
+    assert.ok(declaration !== undefined, "a declaration bundle should have been emitted");
+    assert.match(declaration, /interface Point \{/);
+    assert.match(declaration, /declare function add\(a: number, b: number\): number;/);
+    assert.doesNotMatch(declaration, /return a \+ b/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a declaration error fails the build with the plugin's message", { skip }, async () => {
   const dir = makeProject({
     "src/index.js": "export const value = 42;",
