@@ -100,4 +100,4 @@ npm test
 
 ## License
 
-MIT
+Guchho is licensed under **MIT**. Copyright © [CodeHemu](https://github.com/code-hemu).
