@@ -137,7 +137,8 @@ export function createProgram(ts, { entries, tsconfig, compilerOptions, baseDir 
   return ts.createProgram({ rootNames: toArray(entries), options, host });
 }
 
-// A plain posix form of a file name, used to key the source-to-declaration map.
+// A plain posix form of a file name, so a path check works the same on every
+// platform.
 function normalizeName(fileName) {
   return fileName.replace(/\\/g, "/");
 }
@@ -181,7 +182,7 @@ function redirectDeclarationImports(ts, program, sourceToDeclaration, sourceFile
       return undefined;
     }
     if (resolved === undefined) return undefined;
-    return sourceToDeclaration.get(normalizeName(resolved.resolvedFileName));
+    return sourceToDeclaration.get(referenceKey(ts, resolved.resolvedFileName));
   };
 
   const edits = [];
@@ -255,7 +256,7 @@ export function emitDeclarations(ts, program, entryFiles) {
     );
     if (output === undefined) continue;
     const key = referenceKey(ts, output);
-    sourceToDeclaration.set(normalizeName(sourceFile.fileName), key);
+    sourceToDeclaration.set(referenceKey(ts, sourceFile.fileName), key);
     emitted.push({ source: sourceFile, output: key });
   }
 
@@ -267,7 +268,7 @@ export function emitDeclarations(ts, program, entryFiles) {
   }
 
   const declarations = entryFiles.map((entry) => {
-    const output = sourceToDeclaration.get(normalizeName(entry.fileName));
+    const output = sourceToDeclaration.get(referenceKey(ts, entry.fileName));
     if (output === undefined) {
       fail(`could not determine the declaration output for "${entry.fileName}"`);
     }
