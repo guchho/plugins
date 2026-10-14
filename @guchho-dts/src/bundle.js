@@ -1,3 +1,5 @@
+import path from "node:path";
+
 const PREFIX = "@guchho/dts";
 
 function fail(message) {
@@ -45,6 +47,41 @@ function resolveSpecifier(ts, specifier, containingFile, options, host) {
   return resolved === undefined ? undefined : resolved.resolvedModule;
 }
 
+// A module-resolution host that prefers the files the program already loaded.
+// A program built over in-memory declarations has no counterpart on disk, so
+// resolution has to be answered from the program itself and fall back to the
+// file system only for packages that were never loaded.
+function resolutionHost(ts, program) {
+  const caseSensitive = ts.sys.useCaseSensitiveFileNames;
+  const key = (fileName) => {
+    const normalized = fileName.replace(/\\/g, "/");
+    return caseSensitive ? normalized : normalized.toLowerCase();
+  };
+
+  const files = new Map();
+  const directories = new Set();
+  for (const sourceFile of program.getSourceFiles()) {
+    files.set(key(sourceFile.fileName), sourceFile);
+    let dir = key(path.posix.dirname(sourceFile.fileName.replace(/\\/g, "/")));
+    while (dir !== "" && dir !== "." && !directories.has(dir)) {
+      directories.add(dir);
+      const parent = key(path.posix.dirname(dir));
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+
+  return {
+    fileExists: (fileName) => files.has(key(fileName)) || ts.sys.fileExists(fileName),
+    readFile: (fileName) => files.get(key(fileName))?.text ?? ts.sys.readFile(fileName),
+    directoryExists: (dir) => directories.has(key(dir)) || ts.sys.directoryExists(dir),
+    getDirectories: (dir) => ts.sys.getDirectories(dir),
+    realpath: (fileName) => ts.sys.realpath?.(fileName) ?? fileName,
+    getCurrentDirectory: () => ts.sys.getCurrentDirectory(),
+    useCaseSensitiveFileNames: caseSensitive,
+  };
+}
+
 function packageNameOf(fileName) {
   const marker = "/node_modules/";
   const index = fileName.lastIndexOf(marker);
@@ -85,7 +122,7 @@ export function makeExternalTest(includeExternal, respectExternal) {
 
 // Breadth-first walk of the local declaration graph. External modules are
 // leaves: they are never traversed and never inlined.
-function collectModules(ts, program, entries, compilerOptions, isExternal) {
+function collectModules(ts, program, entries, compilerOptions, isExternal, host = resolutionHost(ts, program)) {
   const checker = program.getTypeChecker();
   const visited = new Set();
   const order = [];
@@ -103,7 +140,7 @@ function collectModules(ts, program, entries, compilerOptions, isExternal) {
         specifier,
         sourceFile.fileName,
         compilerOptions,
-        ts.sys,
+        host,
       );
       if (resolved === undefined) continue;
       if (isExternal(resolved)) continue;
@@ -352,8 +389,8 @@ function collectExports(ts, checker, entry, rename) {
 
 const ANONYMOUS_DEFAULT = "_default";
 
-function isExternalSpecifier(ts, specifier, sourceFile, compilerOptions, isExternal) {
-  const resolved = resolveSpecifier(ts, specifier, sourceFile.fileName, compilerOptions, ts.sys);
+function isExternalSpecifier(ts, specifier, sourceFile, compilerOptions, isExternal, host) {
+  const resolved = resolveSpecifier(ts, specifier, sourceFile.fileName, compilerOptions, host);
   return isExternal(resolved);
 }
 
@@ -483,7 +520,7 @@ function flattenNamespaceAccess(ts, checker, rename, state, node) {
 }
 
 // Transforms every statement of the graph into one flat list and prints it.
-function emitBundle(ts, checker, order, rename, named, defaultName, isExternal, compilerOptions) {
+function emitBundle(ts, checker, order, rename, named, defaultName, isExternal, compilerOptions, host) {
   const factory = ts.factory;
   const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
   const namespaces = localNamespaces(checker, order);
@@ -493,7 +530,7 @@ function emitBundle(ts, checker, order, rename, named, defaultName, isExternal, 
     const state = {
       factory,
       namespaces,
-      isExternal: (specifier) => isExternalSpecifier(ts, specifier, sourceFile, compilerOptions, isExternal),
+      isExternal: (specifier) => isExternalSpecifier(ts, specifier, sourceFile, compilerOptions, isExternal, host),
     };
     const synthetic = factory.createSourceFile(
       sourceFile.statements.slice(),
@@ -561,8 +598,9 @@ export function collectDiagnostics(ts, program) {
 // Bundles one declaration entry into a single module's text.
 export function bundleEntry(ts, program, entry, options) {
   const compilerOptions = program.getCompilerOptions();
+  const host = resolutionHost(ts, program);
   const isExternal = makeExternalTest(options.includeExternal, options.respectExternal);
-  const { checker, order } = collectModules(ts, program, [entry], compilerOptions, isExternal);
+  const { checker, order } = collectModules(ts, program, [entry], compilerOptions, isExternal, host);
 
   if (order.length === 0) {
     fail(`no declarations found for entry "${entry.fileName}"`);
@@ -570,7 +608,7 @@ export function bundleEntry(ts, program, entry, options) {
 
   const rename = buildRenameMap(ts, checker, order);
   const { named, defaultName } = collectExports(ts, checker, entry, rename);
-  return emitBundle(ts, checker, order, rename, named, defaultName, isExternal, compilerOptions);
+  return emitBundle(ts, checker, order, rename, named, defaultName, isExternal, compilerOptions, host);
 }
 
 export { fail };
