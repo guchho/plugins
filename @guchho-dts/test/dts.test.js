@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import dts, { validateOptions } from "../src/index.js";
 import { declarationName, outputPathFor } from "../src/emit.js";
@@ -272,13 +273,65 @@ test("multiple entries produce one bundle each under dir", () => {
   );
 });
 
-test("a non-declaration entry is rejected", () => {
-  withProject({ "index.ts": "export const x = 1;\n" }, () => {
+test("a non-TypeScript entry is rejected", () => {
+  withProject({ "index.js": "export const x = 1;\n" }, () => {
     assert.throws(
-      () => run(dts({ entry: "index.ts", outfile: "out.d.ts" })),
-      /not a declaration file/,
+      () => run(dts({ entry: "index.js", outfile: "out.d.ts" })),
+      /not a TypeScript file/,
     );
   });
+});
+
+test("a source entry is emitted to declarations and bundled", () => {
+  withProject(
+    {
+      "src/index.ts": 'export { add } from "./math";\nexport interface Point { x: number }\n',
+      "src/math.ts": "export function add(a: number, b: number): number {\n  return a + b;\n}\n",
+    },
+    () => {
+      const { assets } = run(dts({ entry: "src/index.ts", outfile: "dist/index.d.ts" }));
+      assert.equal(assets.length, 1);
+      assert.equal(assets[0].fileName, "dist/index.d.ts");
+      const text = String(assets[0].source);
+      assert.match(text, /declare function add\(a: number, b: number\): number;/);
+      assert.match(text, /interface Point/);
+      assert.doesNotMatch(text, /return a \+ b/);
+    },
+  );
+});
+
+test("a source entry with a local interface reference keeps it flat", () => {
+  withProject(
+    {
+      "src/index.ts": 'import { Options } from "./types";\nexport function run(o: Options): void {}\n',
+      "src/types.ts": "export interface Options { verbose: boolean }\n",
+    },
+    () => {
+      const { assets } = run(dts({ entry: "src/index.ts", outfile: "out.d.ts" }));
+      const text = String(assets[0].source);
+      assert.match(text, /interface Options/);
+      assert.match(text, /declare function run\(o: Options\): void;/);
+      assert.doesNotMatch(text, /from "\.\/types"/);
+    },
+  );
+});
+
+test("source and declaration entries can be mixed", () => {
+  withProject(
+    {
+      "src/a.ts": "export const a = 1;\n",
+      "src/b.d.ts": "export declare const b: string;\n",
+    },
+    () => {
+      const { assets } = run(
+        dts({ entry: ["src/a.ts", "src/b.d.ts"], dir: "dist" }),
+      );
+      assert.deepEqual(
+        assets.map((asset) => asset.fileName).sort(),
+        ["dist/a.d.ts", "dist/b.d.ts"],
+      );
+    },
+  );
 });
 
 test("a missing entry is rejected", () => {
@@ -367,4 +420,131 @@ test("a re-export from an external package is left in place", () => {
       assert.match(text, /export \{ local \};/);
     },
   );
+});
+
+test("a .tsx source entry generates declarations", () => {
+  withProject(
+    {
+      "tsconfig.json": JSON.stringify({ compilerOptions: { jsx: "react-jsx", strict: false } }),
+      "src/index.tsx":
+        "export interface Props { title: string }\n" +
+        "export function label(props: Props): string { return props.title; }\n",
+    },
+    () => {
+      const { assets } = run(dts({ entry: "src/index.tsx", outfile: "dist/index.d.ts" }));
+      const text = String(assets[0].source);
+      assert.match(text, /interface Props/);
+      assert.match(text, /declare function label\(props: Props\): string;/);
+      assert.doesNotMatch(text, /return props\.title/);
+    },
+  );
+});
+
+test("tsconfig compiler options are respected", () => {
+  withProject(
+    {
+      "tsconfig.json": JSON.stringify({ compilerOptions: { strict: false } }),
+      "src/index.ts": "export function f(x) { return x; }\n",
+    },
+    () => {
+      const { assets } = run(dts({ entry: "src/index.ts", outfile: "out.d.ts" }));
+      assert.match(String(assets[0].source), /declare function f\(x: any\): any;/);
+    },
+  );
+
+  withProject(
+    {
+      "tsconfig.json": JSON.stringify({ compilerOptions: { strict: true } }),
+      "src/index.ts": "export function f(x) { return x; }\n",
+    },
+    () => {
+      assert.throws(
+        () => run(dts({ entry: "src/index.ts", outfile: "out.d.ts" })),
+        /error TS7006/,
+      );
+    },
+  );
+});
+
+test("extends and path aliases resolve to declarations, not source", () => {
+  withProject(
+    {
+      "tsconfig.base.json": JSON.stringify({ compilerOptions: { strict: false } }),
+      "tsconfig.json": JSON.stringify({
+        extends: "./tsconfig.base.json",
+        compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["src/lib/*"] } },
+      }),
+      "src/index.ts": 'import { helper } from "@lib/helper";\nexport { helper };\n',
+      "src/lib/helper.ts": "export function helper(): number { return 1; }\n",
+    },
+    () => {
+      const { assets } = run(dts({ entry: "src/index.ts", outfile: "out.d.ts" }));
+      const text = String(assets[0].source);
+      assert.match(text, /declare function helper\(\): number;/);
+      assert.match(text, /export \{ helper \};/);
+      assert.doesNotMatch(text, /return 1/);
+      assert.doesNotMatch(text, /@lib\/helper/);
+    },
+  );
+});
+
+test("two entries that would write the same file are rejected", () => {
+  withProject(
+    {
+      "src/a/index.d.ts": "export declare const a: number;\n",
+      "src/b/index.d.ts": "export declare const b: number;\n",
+    },
+    () => {
+      assert.throws(
+        () => run(dts({ entry: ["src/a/index.d.ts", "src/b/index.d.ts"], dir: "dist" })),
+        /both write "dist\/index\.d\.ts"/,
+      );
+    },
+  );
+});
+
+test("a failed build leaves an existing output file untouched", () => {
+  withProject(
+    {
+      "src/index.d.ts": "export declare const broken: NotAType;\n",
+      "out.d.ts": "export declare const keep: boolean;\n",
+    },
+    () => {
+      assert.throws(
+        () => run(dts({ entry: "src/index.d.ts", outfile: "out.d.ts" })),
+        /error TS\d+/,
+      );
+      assert.equal(
+        fs.readFileSync(path.join(process.cwd(), "out.d.ts"), "utf8"),
+        "export declare const keep: boolean;\n",
+      );
+    },
+  );
+});
+
+test("a second build reflects changed sources instead of serving stale output", () => {
+  withProject({ "src/index.ts": "export const a = 1;\n" }, () => {
+    const plugin = dts({ entry: "src/index.ts", outfile: "out.d.ts" });
+
+    const first = run(plugin);
+    assert.match(String(first.assets[0].source), /declare const a\b/);
+
+    fs.writeFileSync(path.join(process.cwd(), "src/index.ts"), "export const b = 2;\n");
+
+    const second = run(plugin);
+    assert.equal(second.assets.length, 1);
+    assert.match(String(second.assets[0].source), /declare const b\b/);
+    assert.doesNotMatch(String(second.assets[0].source), /declare const a\b/);
+  });
+});
+
+test("a missing TypeScript compiler is reported with an actionable error", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "guchho-dts-nots-"));
+  try {
+    fs.copyFileSync(new URL("../src/typescript.js", import.meta.url), path.join(dir, "typescript.js"));
+    const isolated = await import(pathToFileURL(path.join(dir, "typescript.js")).href);
+    assert.throws(() => isolated.getTypeScript(), /no TypeScript compiler API found/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
