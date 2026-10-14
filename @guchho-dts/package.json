@@ -1,6 +1,6 @@
 {
   "name": "@guchho/dts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript declaration bundler plugin for Guchho builds.",
   "type": "module",
   "types": "./src/index.d.ts",
@@ -15,7 +15,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "verify": "npm test && npm pack --dry-run"
+    "typecheck": "tsc --noEmit --strict --skipLibCheck src/index.d.ts",
+    "verify": "npm run typecheck && npm test && npm pack --dry-run"
   },
   "keywords": [
     "guchho",
