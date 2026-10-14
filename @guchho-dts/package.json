@@ -1,0 +1,59 @@
+{
+  "name": "@guchho/dts",
+  "version": "0.1.0",
+  "description": "TypeScript declaration bundler plugin for Guchho builds.",
+  "type": "module",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src/"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "verify": "npm test && npm pack --dry-run"
+  },
+  "keywords": [
+    "guchho",
+    "dts",
+    "declaration",
+    "typescript",
+    "types",
+    "bundle",
+    "plugin",
+    "plugin-hooks"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guchho/plugins.git",
+    "directory": "@guchho-dts"
+  },
+  "homepage": "https://github.com/guchho/plugins/tree/main/@guchho-dts#readme",
+  "bugs": {
+    "url": "https://github.com/guchho/plugins/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.5",
+    "@typescript/typescript6": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    },
+    "@typescript/typescript6": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "guchho": "^1.0.6",
+    "typescript": "^6.0.0"
+  }
+}

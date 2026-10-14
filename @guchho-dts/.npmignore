@@ -1,0 +1,5 @@
+examples/
+test/
+node_modules/
+.npmignore
+package-lock.json
