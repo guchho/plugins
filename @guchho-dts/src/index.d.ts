@@ -2,8 +2,10 @@ import type { Plugin } from "guchho";
 
 export interface DtsPluginOptions {
   /**
-   * One declaration entry, or several. Required. A path is resolved against the
-   * build's working directory and must name a declaration file.
+   * One entry, or several. Required. A path is resolved against the build's
+   * working directory and must name a TypeScript file. A source file
+   * (".ts"/".tsx"/".mts"/".cts") is compiled to declarations before it is
+   * bundled; a ".d.ts" is bundled as is.
    */
   entry: string | string[];
   /**
@@ -38,6 +40,12 @@ export interface DtsPluginOptions {
  * Bundles TypeScript declaration files into one flat module per entry and emits
  * each as a Guchho build asset.
  */
+// A declaration bundler for Guchho. It builds a TypeScript program over the
+// given entry (or entries), inlines every local module they reach, leaves
+// external packages as imports, renames colliding declarations, and emits one
+// flat module per entry as a build asset. A source entry is compiled to
+// declarations in memory first, so an implementation file needs no separate
+// "tsc" step.
 export function dts(options: DtsPluginOptions): Plugin;
 
 export default dts;
