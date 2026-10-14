@@ -2,6 +2,8 @@
 
 TypeScript declaration bundler plugin for [Guchho](https://github.com/guchho/guchho) builds.
 
+[![Guchho Plugin dts](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_dts_plugin.png)](https://github.com/guchho)
+
 Guchho bundles JavaScript, but a published package also needs one tidy `.d.ts`. This plugin reads your declaration entry with the TypeScript compiler API, inlines every local module it reaches into a single flat declaration file, leaves installed packages as imports, renames colliding declarations, and emits the result as a build asset next to the JavaScript output.
 
 ## Installation
