@@ -1,3 +1,5 @@
+# Guchho plugins
+
 Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler. 
 
 Each plugin lives in its own directory, is published to npm under the `@guchho` scope, and has a full README with options, examples, and error reference.
