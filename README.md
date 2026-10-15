@@ -1,16 +1,15 @@
-<p align="center">
-  <a href="https://github.com/guchho">
-    <img src="https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_plugins.png" alt="Guchho Plugins" style="width: 50%;">
-  </a>
-</p>
+# Guchho plugins
 
-Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler. Each plugin lives in its own directory, is published to npm under the `@guchho` scope, and has a full README with options, examples, and error reference.
+Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler. 
 
+Each plugin lives in its own directory, is published to npm under the `@guchho` scope, and has a full README with options, examples, and error reference.
 
 | Plugin | Version | Description |
 | --- | --- | --- |
 | [`@guchho/banner`](./@guchho-banner) | [![npm](https://img.shields.io/npm/v/@guchho/banner.svg)](https://www.npmjs.com/package/@guchho/banner) | Copyright and license banner prepended to JavaScript and CSS outputs. |
 | [`@guchho/dts`](./@guchho-dts) | [![npm](https://img.shields.io/npm/v/@guchho/dts.svg)](https://www.npmjs.com/package/@guchho/dts) | TypeScript declaration bundler - one flat `.d.ts` next to your JavaScript. |
+
+[![Guchho Plugins](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_plugins.png)](https://github.com/guchho)
 
 ## Install
 
