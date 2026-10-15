@@ -1,6 +1,6 @@
-# plugins
+[![Guchho Plugins](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_plugins.png)](https://github.com/guchho)
 
-Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler.
+Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler. 
 
 Each plugin lives in its own directory, is published to npm under the `@guchho` scope, and has a full README with options, examples, and error reference.
 
