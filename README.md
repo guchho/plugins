@@ -80,4 +80,4 @@ gh workflow run npm-publish.yml -f plugin=@guchho/banner -f dry_run=false
 
 ## License
 
-MIT. Copyright © [CodeHemu](https://github.com/code-hemu).
+Guchho is licensed under **MIT**. Copyright © [CodeHemu](https://github.com/code-hemu).
