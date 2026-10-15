@@ -1,6 +1,11 @@
-[![Guchho Plugins](https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_plugins.png)](https://github.com/guchho)
+<p align="center">
+  <a href="https://github.com/guchho">
+    <img src="https://raw.githubusercontent.com/guchho/plugins/refs/heads/main/resources/guchho_plugins.png" alt="Guchho Plugins" style="width: 50%;">
+  </a>
+</p>
 
 Official plugins for the [Guchho](https://github.com/guchho/guchho) bundler. Each plugin lives in its own directory, is published to npm under the `@guchho` scope, and has a full README with options, examples, and error reference.
+
 
 | Plugin | Version | Description |
 | --- | --- | --- |
