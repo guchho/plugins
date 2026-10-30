@@ -6,8 +6,8 @@ Each plugin lives in its own directory, is published to npm under the `@guchho` 
 
 | Plugin | Version | Description |
 | --- | --- | --- |
-| [`@guchho/banner`](./@guchho-banner) | [![npm](https://img.shields.io/npm/v/@guchho/banner.svg)](https://www.npmjs.com/package/@guchho/banner) | Copyright and license banner prepended to JavaScript and CSS outputs. |
-| [`@guchho/dts`](./@guchho-dts) | [![npm](https://img.shields.io/npm/v/@guchho/dts.svg)](https://www.npmjs.com/package/@guchho/dts) | TypeScript declaration bundler - one flat `.d.ts` next to your JavaScript. |
+| [`@guchho/banner`](./packages/banner) | [![npm](https://img.shields.io/npm/v/@guchho/banner.svg)](https://www.npmjs.com/package/@guchho/banner) | Copyright and license banner prepended to JavaScript and CSS outputs. |
+| [`@guchho/dts`](./packages/dts) | [![npm](https://img.shields.io/npm/v/@guchho/dts.svg)](https://www.npmjs.com/package/@guchho/dts) | TypeScript declaration bundler - one flat `.d.ts` next to your JavaScript. |
 
 ## Install
 
