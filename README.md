@@ -6,8 +6,8 @@ Each plugin lives in its own directory, is published to npm under the `@guchho` 
 
 | Plugin | Version | Description |
 | --- | --- | --- |
-| [`@guchho/banner`](./@guchho-banner) | [![npm](https://img.shields.io/npm/v/@guchho/banner.svg)](https://www.npmjs.com/package/@guchho/banner) | Copyright and license banner prepended to JavaScript and CSS outputs. |
-| [`@guchho/dts`](./@guchho-dts) | [![npm](https://img.shields.io/npm/v/@guchho/dts.svg)](https://www.npmjs.com/package/@guchho/dts) | TypeScript declaration bundler - one flat `.d.ts` next to your JavaScript. |
+| [`@guchho/banner`](./packages/banner) | [![npm](https://img.shields.io/npm/v/@guchho/banner.svg)](https://www.npmjs.com/package/@guchho/banner) | Copyright and license banner prepended to JavaScript and CSS outputs. |
+| [`@guchho/dts`](./packages/dts) | [![npm](https://img.shields.io/npm/v/@guchho/dts.svg)](https://www.npmjs.com/package/@guchho/dts) | TypeScript declaration bundler - one flat `.d.ts` next to your JavaScript. |
 
 ## Install
 
@@ -43,8 +43,9 @@ Requirements: Node.js 20+ and a Guchho release that hosts plugin hooks.
 ## Repository layout
 
 ```
-@guchho-banner/   @guchho/banner source, tests, examples
-@guchho-dts/      @guchho/dts source, tests, examples
+packages/banner/  @guchho/banner source, tests, examples
+packages/dts/     @guchho/dts source, tests, examples
+docs/             documentation rendered by guchho.js.org
 resources/        plugin banner images
 .github/workflows npm-publish.yml (manual publish workflow)
 ```
@@ -54,7 +55,7 @@ resources/        plugin banner images
 Each package is self-contained - run its scripts from inside the package directory:
 
 ```bash
-cd @guchho-banner
+cd packages/banner
 npm install
 npm test        # unit + integration (node:test)
 npm run verify  # tests + npm pack --dry-run (@guchho/dts also typechecks)
